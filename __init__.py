@@ -77,13 +77,46 @@ class RetargetMetarigToKinectRig(Operator):
             raise TypeError("Must have a Kinect rig set")
         if not isinstance(context.scene.kinect_retarget_rig_to, bpy.types.Object):
             raise TypeError("Must have a target rig set")
+        # set to first frame 
+        bpy.context.scene.frame_set(0)
 
-        # print(context.scene.kinect_retarget_rig_from)
-        # print(type(context.scene.kinect_retarget_rig_from))
         kinect_rig = context.scene.kinect_retarget_rig_from
         metarig = context.scene.kinect_retarget_rig_to
+        prefix = kinect_rig.name.split(":")[0] + ":"
+
+        # add kinect rig correction objects
+        if bpy.context.object.mode != 'OBJECT':
+            bpy.ops.object.mode_set(mode='OBJECT', toggle=False)
+
+        if kinect_rig.parent is None:
+            bpy.ops.object.empty_add(type="SINGLE_ARROW")
+            rotation_empty = context.selected_objects[0]
+            bpy.ops.object.empty_add(type="PLAIN_AXES")
+            location_empty = context.selected_objects[0]
+        else:
+            rotation_empty = kinect_rig.parent
+            location_empty = rotation_empty.parent
+
+        rotation_empty.name = "KinectRotationCorrection"
+        kinect_rig.parent = rotation_empty
+        location_empty.name = "KinectPositionCorrection"
+        rotation_empty.parent = location_empty
 
         # add bones
+        kinect_rig.select_set(True)
+        bpy.context.view_layer.objects.active = kinect_rig
+        bpy.ops.object.mode_set(mode='EDIT', toggle=False)
+
+        edit_bones = kinect_rig.data.edit_bones
+        try:
+            hip_corrected =  edit_bones["hip_corrected"]
+        except KeyError:
+            hip_corrected = edit_bones.new("hip_corrected")
+        hip_corrected.parent = edit_bones[prefix + "Hips"]
+        hip_corrected.head = edit_bones[prefix + "Hips"].head
+        hip_corrected.tail = edit_bones[prefix + "Hips"].tail
+        hip_corrected.roll = 3.141593
+
         bpy.ops.object.mode_set(mode='OBJECT', toggle=False)
         metarig.select_set(True)
         bpy.context.view_layer.objects.active = metarig
@@ -129,7 +162,6 @@ class RetargetMetarigToKinectRig(Operator):
         # add constraints
         bpy.ops.object.mode_set(mode='POSE', toggle=False)
         bpy.ops.pose.select_all(action="DESELECT")
-        bpy.ops.pose.constraints_clear()
 
         metarig.data.bones["elbow_position.L"].select = True
         metarig.data.bones["elbow_position.R"].select = True
@@ -137,9 +169,8 @@ class RetargetMetarigToKinectRig(Operator):
         metarig.data.bones["knee_position.R"].select = True
         metarig.data.bones["root"].select = True
 
-
         bpy.ops.pose.constraints_clear()
-        prefix = kinect_rig.name.split(":")[0] + ":"
+
         subtarget_map = {
             "elbow_position.L": prefix + "LeftForeArm",
             "elbow_position.R": prefix + "RightForeArm",
@@ -147,6 +178,7 @@ class RetargetMetarigToKinectRig(Operator):
             "knee_position.R": prefix + "RightLeg",
             "root": prefix + "Hips",
         }
+
         for pose_bone in context.selected_pose_bones_from_active_object:
             copy_rot = (pose_bone.constraints.get("CopyRot")
                     or pose_bone.constraints.new(type='COPY_ROTATION'))
@@ -160,8 +192,47 @@ class RetargetMetarigToKinectRig(Operator):
             copy_pos.target = kinect_rig
             copy_pos.subtarget = subtarget_map[pose_bone.name]
             copy_pos.use_z = pose_bone.name != "root"
+        bpy.ops.pose.select_all(action="DESELECT")
 
+        # Rotate kinect
+        bpy.ops.object.mode_set(mode='OBJECT', toggle=False)
+        bpy.ops.object.select_all(action="DESELECT")
+        v_1 = kinect_rig.data.bones[prefix + "Hips"].head - kinect_rig.data.bones[prefix + "Hips"].tail
+        v_2 = (0,-1,0)
+        rotation_empty.rotation_euler[0] = v_1.angle(v_2)
 
+        # Scale kinect
+        kinect_rig.select_set(True)
+        # deselect the other bones
+        for bone in kinect_rig.data.bones: 
+            bone.select = False
+            bone.select_tail = False
+            bone.select_head = False
+        # select hip head for pos
+        kinect_rig.data.bones["hip_corrected"].select_head = True
+        bpy.ops.object.mode_set(mode='EDIT', toggle=False)
+
+        old_transform_pivot_point = bpy.context.scene.tool_settings.transform_pivot_point
+        old_cursor_location = bpy.context.scene.cursor.location
+
+        # snap cursor to head
+        bpy.context.scene.tool_settings.transform_pivot_point = 'MEDIAN_POINT'
+        bpy.ops.view3d.snap_cursor_to_selected()
+
+        kinect_rig_height = bpy.context.scene.cursor.location.z
+
+        # get metarig height
+        spine = metarig.data.bones["spine"]
+        metarig_height = spine.head.z * metarig.scale.z
+
+        # set new scale for kinect rig
+        kinect_rig_scale = metarig_height / kinect_rig_height * kinect_rig.scale.z
+        kinect_rig.scale = (kinect_rig_scale, kinect_rig_scale, kinect_rig_scale)
+        bpy.ops.object.mode_set(mode='OBJECT', toggle=False)
+
+        # put cursor back
+        bpy.context.scene.cursor.location = old_cursor_location
+        bpy.context.scene.tool_settings.transform_pivot_point = old_transform_pivot_point
 
         # limit_rot = (elbow_position_l.constraints.get("LimitRot")
         #         or elbow_position_l.constraints.new(type='LIMIT_ROTATION'))
@@ -173,6 +244,7 @@ class RetargetMetarigToKinectRig(Operator):
         #         or pose_bone.constraints.new(type='LIMIT_LOCATION'))
         # limit_pos.name = "LimitPos"
         # limit_pos.use_min_z = True
+
 
 
         return {'FINISHED'}
@@ -195,7 +267,7 @@ class VIEW3D_PT_kinect_animation_tools_retarget_to_rigify(Panel):
         col.prop(scene,"kinect_retarget_rig_from")
         col.prop(scene,"kinect_retarget_rig_to")
         col.operator("scene.retarget_metarig_to_kinect_rig", text="Retarget")
-        
+
 """Registering"""
 classes = [RetargetMetarigToKinectRig, VIEW3D_PT_kinect_animation_tools_retarget_to_rigify]
 
