@@ -226,15 +226,12 @@ class RetargetMetarigToKinectRig(Operator):
         metarig_height = spine.head.z * metarig.scale.z
 
         # set new scale for kinect rig
-        kinect_rig_scale = metarig_height / kinect_rig_height * kinect_rig.scale.z
-        kinect_rig.scale = (kinect_rig_scale, kinect_rig_scale, kinect_rig_scale)
+        kinect_rig_scale = metarig_height / kinect_rig_height # * kinect_rig.scale.z
+        bpy.ops.object.mode_set(mode='OBJECT', toggle=False)
+        location_empty.scale = (kinect_rig_scale, kinect_rig_scale, kinect_rig_scale)
 
         # position kinect rig on y
-        bpy.ops.view3d.snap_cursor_to_selected()
-        kinect_rig_y = bpy.context.scene.cursor.location.y
-
-        bpy.ops.object.mode_set(mode='OBJECT', toggle=False)
-        location_empty.location.y = spine.head.y - kinect_rig_y
+        location_empty.location.y = metarig.data.bones["spine"].head.y
 
         # put cursor back
         bpy.context.scene.cursor.location = old_cursor_location
