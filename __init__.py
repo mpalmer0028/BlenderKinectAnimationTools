@@ -159,7 +159,7 @@ class RetargetMetarigToKinectRig(Operator):
         root.head = (0,0,0)
         root.tail = up_vec[:]
 
-        # add constraints
+        # add metarig constraints
         bpy.ops.object.mode_set(mode='POSE', toggle=False)
         bpy.ops.pose.select_all(action="DESELECT")
 
@@ -219,36 +219,74 @@ class RetargetMetarigToKinectRig(Operator):
         bpy.context.scene.tool_settings.transform_pivot_point = 'MEDIAN_POINT'
         bpy.ops.view3d.snap_cursor_to_selected()
 
-        kinect_rig_height = bpy.context.scene.cursor.location.z
+        kinect_rig_hip_location = bpy.context.scene.cursor.location
+        kinect_rig_height = kinect_rig_hip_location.z
 
         # get metarig height
         spine = metarig.data.bones["spine"]
         metarig_height = spine.head.z * metarig.scale.z
 
         # set new scale for kinect rig
-        kinect_rig_scale = metarig_height / kinect_rig_height # * kinect_rig.scale.z
+        kinect_rig_scale = metarig_height / kinect_rig_height * location_empty.scale.z
         bpy.ops.object.mode_set(mode='OBJECT', toggle=False)
-        location_empty.scale = (kinect_rig_scale, kinect_rig_scale, kinect_rig_scale)
+        if kinect_rig_scale != location_empty.scale.x:
+            # print(kinect_rig_scale,location_empty.scale.x)
+            location_empty.scale = (kinect_rig_scale, kinect_rig_scale, kinect_rig_scale)
 
         # position kinect rig on y
-        location_empty.location.y = metarig.data.bones["spine"].head.y
+        if abs(metarig.data.bones["spine"].head.y - location_empty.location.y) > .05:
+            location_empty.location.y = metarig.data.bones["spine"].head.y
 
         # put cursor back
         bpy.context.scene.cursor.location = old_cursor_location
         bpy.context.scene.tool_settings.transform_pivot_point = old_transform_pivot_point
 
-        # limit_rot = (elbow_position_l.constraints.get("LimitRot")
-        #         or elbow_position_l.constraints.new(type='LIMIT_ROTATION'))
-        # limit_rot.name = "LimitRot"
-        # limit_rot.use_limit_x = True
-        # limit_rot.use_limit_y = True
+        bpy.ops.object.select_all(action='DESELECT')
+        kinect_rig.select_set(True)
+        
+        # add kinect rig constaints
+        bpy.ops.object.mode_set(mode='POSE', toggle=False)
+        # deselect the other bones
+        for bone in kinect_rig.data.bones:
+            bone.select = False
+            bone.select_tail = False
+            bone.select_head = False
+        kinect_rig.data.bones[prefix + "Hips"].select = True
+        bpy.ops.pose.constraints_clear()
+        # print(context.selected_pose_bones)
+        for pose_bone in context.selected_pose_bones:
+            print(pose_bone)
+            if pose_bone.name == prefix + "Hips":
+                copy_corrected_pos = (pose_bone.constraints.get("Lock Pos To Position Correction")
+                        or pose_bone.constraints.new(type='COPY_LOCATION'))
+                copy_corrected_pos.name = "Lock Pos To Position Correction"
+                copy_corrected_pos.target = location_empty
+                copy_corrected_pos.use_x = True
+                copy_corrected_pos.use_y = True
+                copy_corrected_pos.use_z = False
+                copy_corrected_pos.target_space = "WORLD"
+                copy_corrected_pos.owner_space = "WORLD"
 
-        # limit_pos = (pose_bone.constraints.get("LimitPos")
-        #         or pose_bone.constraints.new(type='LIMIT_LOCATION'))
-        # limit_pos.name = "LimitPos"
-        # limit_pos.use_min_z = True
+        translation = mathutils.Vector(metarig.data.bones["spine"].head) - mathutils.Vector(kinect_rig_hip_location)
+        bpy.ops.object.mode_set(mode='OBJECT', toggle=False)
 
-
+        metarig.select_set(False)
+        kinect_rig.select_set(True)
+        # move kinect bones on y axis to line up with metarig
+        # deselect the metarig bones
+        for bone in metarig.data.bones:
+            bone.select = False
+            bone.select_tail = False
+            bone.select_head = False
+        # select the kinect_rig bones
+        for bone in kinect_rig.data.bones:
+            bone.select = True
+            bone.select_tail = True
+            bone.select_head = True
+        bpy.ops.object.mode_set(mode='EDIT', toggle=False)
+        # print(translation)
+        # bpy.ops.object.mode_set(mode='OBJECT', toggle=False)
+        bpy.ops.transform.translate(value=translation[:], orient_type='GLOBAL', orient_matrix=((1, 0, 0), (0, 1, 0), (0, 0, 1)), orient_matrix_type='GLOBAL', constraint_axis=(False, True, False), mirror=True, use_proportional_edit=False, proportional_edit_falloff='SMOOTH', proportional_size=1, use_proportional_connected=False, use_proportional_projected=False)
 
         return {'FINISHED'}
 
