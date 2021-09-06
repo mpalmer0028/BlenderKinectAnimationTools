@@ -392,61 +392,48 @@ class RetargetMetarigToKinectRig(Operator):
         bpy.context.object.data.use_mirror_x = False
         bpy.ops.armature.select_all(action='DESELECT')
         bpy.context.object.data.use_mirror_x = True
-        
+
+        # forearm.L rotation
         for axis in [(1,'Y'),(2,'Z')]:
             # Get vectors
             bpy.context.scene.tool_settings.transform_pivot_point = 'MEDIAN_POINT'
             bpy.ops.armature.select_all(action='DESELECT')
+
+            # v_1
             metarig.data.edit_bones["upper_arm.L"].select_head = True
             bpy.ops.view3d.snap_cursor_to_selected()
             vector_1 = bpy.context.scene.cursor.location.copy()
             # print(axis[1], bpy.context.scene.cursor.location)
             metarig.data.edit_bones["upper_arm.L"].select_head = False
 
+            # v_1
             metarig.data.edit_bones["upper_arm.L"].select_tail = True
             bpy.ops.view3d.snap_cursor_to_selected()
             vector_2 = bpy.context.scene.cursor.location.copy()
             # print(axis[1], bpy.context.scene.cursor.location)
             metarig.data.edit_bones["upper_arm.L"].select_tail = False
-            
+
             # snap cursor to head
             metarig.data.edit_bones["upper_arm.L"].select_head = True
             bpy.ops.view3d.snap_cursor_to_selected()
             metarig.data.edit_bones["upper_arm.L"].select_head = False
             bpy.ops.armature.select_all(action='DESELECT')
 
+            # select whole arm
             metarig.data.edit_bones["upper_arm.L"].select = True
-            # print(bpy.context.selected_bones[0].name)
             metarig.data.edit_bones.active = metarig.data.edit_bones["upper_arm.L"]
             bpy.ops.armature.select_similar(type='CHILDREN')
-            
-            
-            # arm_direction = (mathutils.Vector(kinect_rig.data.bones[prefix+"LeftArm"].tail) \
-            #     - mathutils.Vector(kinect_rig.data.bones[prefix+"LeftArm"].head)).normalized()
-            # arm_length = (mathutils.Vector(metarig.data.bones["upper_arm.L"].tail) \
-            #     - mathutils.Vector(metarig.data.bones["upper_arm.L"].head)).magnitude
 
-            
-
-            # print(metarig.data.edit_bones["upper_arm.L"].head.xz)
-            # vector_2.y = vector_1.y
             vertor_direction = vector_2-vector_1
             vertor_direction[axis[0]] = 0
             turn_angle = mathutils.Vector((1,0,0)).angle(vertor_direction, 0)
-            # bpy.ops.object.mode_set(mode='OBJECT', toggle=False)
-            # bpy.ops.object.empty_add(type='ARROWS', align='WORLD', location=vector_1[:], scale=(1, 1, 1))
-            # bpy.ops.object.empty_add(type='ARROWS', align='WORLD', location=vector_2[:], scale=(1, 1, 1))
 
-            # y_angle = math.radians(30)
-            # print(vector_1.xyz, vector_2.xyz,math.degrees(y_angle))
-            # print(vector_1.xz, vector_2.xz,math.degrees(y_angle))
             print(axis[1],  math.degrees(turn_angle), vertor_direction)
             bpy.context.scene.tool_settings.transform_pivot_point = 'CURSOR'
-            # bpy.ops.transform.rotate(value=z_angle, orient_axis='Z', orient_type='GLOBAL', orient_matrix_type='GLOBAL')
-            bpy.ops.transform.rotate(value=turn_angle, orient_axis=axis[1], center_override=vector_1[:], orient_type='GLOBAL')
-            # bpy.ops.object.mode_set(mode='OBJECT', toggle=False)
-            # bpy.ops.object.mode_set(mode='EDIT', toggle=False)
+            if turn_angle != 0:
+                bpy.ops.transform.rotate(value=turn_angle, orient_axis=axis[1], center_override=vector_1[:], orient_type='GLOBAL')
 
+        bpy.ops.armature.select_all(action='DESELECT')
 
         return {'FINISHED'}
 
