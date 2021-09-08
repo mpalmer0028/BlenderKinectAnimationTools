@@ -439,7 +439,58 @@ class RetargetMetarigToKinectRig(Operator):
                     bpy.context.object.data.use_mirror_x = True
                     bpy.ops.transform.rotate(value=turn_angle, orient_axis=axis[1], center_override=vector_1[:], orient_type='GLOBAL')
                 bpy.ops.armature.select_all(action='DESELECT')
-            
+
+        # set elbow position location
+        edit_bones = metarig.data.edit_bones
+        try:
+            elbow_position_l =  edit_bones["elbow_position.L"]
+        except KeyError:
+            elbow_position_l = edit_bones.new("elbow_position.L")
+        elbow_position_l.head = edit_bones["upper_arm.L"].tail
+        elbow_position_l.tail = (mathutils.Vector(edit_bones["upper_arm.L"].tail)+up_vec)[:]
+
+        try:
+            elbow_position_r =  edit_bones["elbow_position.R"]
+        except KeyError:
+            elbow_position_r = edit_bones.new("elbow_position.R")
+        elbow_position_r.head = edit_bones["upper_arm.R"].tail
+        elbow_position_r.tail = (mathutils.Vector(edit_bones["upper_arm.R"].tail)+up_vec)[:]
+
+        # place kinect arms
+        bpy.ops.object.mode_set(mode='OBJECT', toggle=False)
+        kinect_rig.select_set(True)
+        metarig.select_set(True)
+        bpy.ops.object.mode_set(mode='EDIT', toggle=False)
+        bpy.context.object.data.use_mirror_x = False
+        bpy.ops.armature.select_all(action='DESELECT')
+        bpy.context.scene.tool_settings.use_snap = True
+        bpy.context.scene.tool_settings.snap_elements = {'VERTEX'}
+        bpy.context.scene.tool_settings.transform_pivot_point = 'MEDIAN_POINT'
+        bpy.context.object.data.use_mirror_x = True
+
+        for bone_str in [\
+            (prefix+'LeftArm', 'upper_arm.L'),(prefix+'RightArm', 'upper_arm.R'),\
+            (prefix+'LeftForeArm', 'forearm.L'),(prefix+'RightForeArm', 'forearm.R'),\
+            (prefix+'LeftHand', 'hand.L'),(prefix+'RightHand', 'hand.R')\
+                ]:
+
+            # snap cursor to head
+            metarig.data.edit_bones[bone_str[1]].select_head = True
+            bpy.ops.view3d.snap_cursor_to_selected()
+            metarig.data.edit_bones[bone_str[1]].select_head = False
+            # snap head to cursor
+            kinect_rig.data.edit_bones[bone_str[0]].select_head = True
+            bpy.ops.view3d.snap_selected_to_cursor(use_offset=False)
+            kinect_rig.data.edit_bones[bone_str[0]].select_head = False
+
+            # snap cursor to tail
+            metarig.data.edit_bones[bone_str[1]].select_tail = True
+            bpy.ops.view3d.snap_cursor_to_selected()
+            metarig.data.edit_bones[bone_str[1]].select_tail = False
+            # snap tail to cursor
+            kinect_rig.data.edit_bones[bone_str[0]].select_tail = True
+            bpy.ops.view3d.snap_selected_to_cursor(use_offset=False)
+            kinect_rig.data.edit_bones[bone_str[0]].select_tail = False
 
 
         return {'FINISHED'}
