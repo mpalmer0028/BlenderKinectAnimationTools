@@ -437,7 +437,8 @@ class RetargetMetarigToKinectRig(Operator):
                 if turn_angle != 0:
                     # print(bone_name, axis[1],  math.degrees(turn_angle), vertor_direction)
                     bpy.context.object.data.use_mirror_x = True
-                    bpy.ops.transform.rotate(value=turn_angle, orient_axis=axis[1], center_override=vector_1[:], orient_type='GLOBAL')
+                    bpy.ops.transform.rotate(value=turn_angle, orient_axis=axis[1], \
+                        center_override=vector_1[:], orient_type='GLOBAL')
                 bpy.ops.armature.select_all(action='DESELECT')
 
         # set elbow position location
@@ -492,6 +493,41 @@ class RetargetMetarigToKinectRig(Operator):
             bpy.ops.view3d.snap_selected_to_cursor(use_offset=False)
             kinect_rig.data.edit_bones[bone_str[0]].select_tail = False
 
+        # Add bone constaints to metarig
+        bpy.ops.object.mode_set(mode='OBJECT', toggle=False)
+        metarig.select_set(True)
+        kinect_rig.select_set(False)
+
+        bpy.ops.object.mode_set(mode='POSE', toggle=False)
+        # deselect the other bones
+        for bone in metarig.data.bones:
+            bone.select = False
+            bone.select_tail = False
+            bone.select_head = False
+
+        metarig.data.bones["root"].select = True
+        metarig.data.bones.active = metarig.data.bones["root"]
+        bpy.ops.pose.constraints_clear()
+
+        for pose_bone in context.selected_pose_bones:
+            if pose_bone.name == "root":
+                copy_spine_loc = (pose_bone.constraints.get("Spine Location Copy")
+                                or pose_bone.constraints.new(type='COPY_LOCATION'))
+                copy_spine_loc.name = "Spine Location Copy"
+                copy_spine_loc.target = metarig
+                copy_spine_loc.subtarget = "spine"
+                copy_spine_loc.use_x = True
+                copy_spine_loc.use_y = True
+                copy_spine_loc.use_z = False
+
+                copy_spine_rot = (pose_bone.constraints.get("Spine Rotation Copy")
+                                or pose_bone.constraints.new(type='COPY_ROTATION'))
+                copy_spine_rot.name = "Spine Rotation Copy"
+                copy_spine_rot.target = metarig
+                copy_spine_rot.subtarget = "spine"
+                copy_spine_rot.use_x = False
+                copy_spine_rot.use_y = False
+                copy_spine_rot.use_z = True
 
         return {'FINISHED'}
 
