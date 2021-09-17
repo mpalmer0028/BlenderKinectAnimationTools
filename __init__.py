@@ -118,7 +118,7 @@ class RetargetMetarigToKinectRig(Operator):
         hip_corrected.parent = edit_bones[prefix + "Hips"]
         hip_corrected.head = edit_bones[prefix + "Hips"].head
         hip_corrected.tail = edit_bones[prefix + "Hips"].tail
-        hip_corrected.roll = 3.141593
+        hip_corrected.roll = 0#3.141593
 
         bpy.ops.object.mode_set(mode='OBJECT', toggle=False)
         metarig.select_set(True)
@@ -161,6 +161,7 @@ class RetargetMetarigToKinectRig(Operator):
             root = edit_bones.new("root")
         root.head = (0,0,0)
         root.tail = up_vec[:]
+        metarig.data.edit_bones["spine"].parent =  metarig.data.edit_bones["root"]
 
         # add metarig constraints
         bpy.ops.object.mode_set(mode='POSE', toggle=False)
@@ -320,10 +321,10 @@ class RetargetMetarigToKinectRig(Operator):
         bone_strs = [(prefix+"Hips", "spine"),("hip_corrected", "spine"),\
             (prefix+"Head", "spine.005"),\
             (prefix+"Neck", "spine.004"),\
-            # (prefix+"Spine", "spine.003"),\
-            # (prefix+"LeftArm", "upper_arm.L"),(prefix+"RightArm", "upper_arm.R"),\
-            # (prefix+"LeftShoulder", "shoulder.L"),(prefix+"RightShoulder", "shoulder.R"),\
-            # (prefix+"LeftForeArm", "forearm.L"),(prefix+"RightForeArm", "forearm.R"),\
+            (prefix+"Spine", "spine.003"),\
+            (prefix+"LeftArm", "upper_arm.L"),(prefix+"RightArm", "upper_arm.R"),\
+            (prefix+"LeftShoulder", "shoulder.L"),(prefix+"RightShoulder", "shoulder.R"),\
+            (prefix+"LeftForeArm", "forearm.L"),(prefix+"RightForeArm", "forearm.R"),\
             (prefix+"LeftUpLeg", "thigh.L"),(prefix+"RightUpLeg", "thigh.R"),\
             (prefix+"LeftLeg", "shin.L"),(prefix+"RightLeg", "shin.R"),\
             (prefix+"LeftFoot", "foot.L"),(prefix+"RightFoot", "foot.R"),\
@@ -506,16 +507,54 @@ class RetargetMetarigToKinectRig(Operator):
             bone.select_head = False
 
         metarig.data.bones["root"].select = True
+        # Spine
+        metarig.data.bones["spine"].select = True
+        metarig.data.bones["spine.002"].select = True
+        metarig.data.bones["spine.004"].select = True
+        metarig.data.bones["spine.005"].select = True
+        # Arms
+        metarig.data.bones["upper_arm.L"].select = True
+        metarig.data.bones["upper_arm.R"].select = True
+        metarig.data.bones["forearm.L"].select = True
+        metarig.data.bones["forearm.R"].select = True
+        metarig.data.bones["hand.L"].select = True
+        metarig.data.bones["hand.R"].select = True
+        # Legs
+        metarig.data.bones["thigh.L"].select = True
+        metarig.data.bones["thigh.R"].select = True
+        metarig.data.bones["shin.L"].select = True
+        metarig.data.bones["shin.R"].select = True
+        metarig.data.bones["foot.L"].select = True
+        metarig.data.bones["foot.R"].select = True
+        metarig.data.bones["toe.L"].select = True
+        metarig.data.bones["toe.R"].select = True
+
         metarig.data.bones.active = metarig.data.bones["root"]
         bpy.ops.pose.constraints_clear()
 
+        copied_bones_rot = [("spine","hip_corrected"),("spine.002",prefix+"Spine"),\
+            ("spine.004",prefix+"Neck"),("spine.005",prefix+"Head"),\
+            ("forearm.L",prefix+"LeftForeArm"),("forearm.R",prefix+"RightForeArm"),\
+            ("upper_arm.L",prefix+"LeftArm"),("upper_arm.R",prefix+"RightArm"),\
+            ("hand.L",prefix+"LeftHand"),("hand.R",prefix+"RightHand"),\
+            ("thigh.L",prefix+"LeftUpLeg"),("thigh.R",prefix+"RightUpLeg"),\
+            ("shin.L",prefix+"LeftLeg"),("shin.R",prefix+"RightLeg"),\
+            # ("foot.L",prefix+"LeftFoot"),("foot.R",prefix+"RightFoot"),\
+            # ("toe.L",prefix+"LeftToeBase"),("toe.R",prefix+"RightToeBase")\
+                ]
+        # (pose_bone.name, subtarget, head_tail(0 is head)
+        copied_bones_damped_track = []
         for pose_bone in context.selected_pose_bones:
+            copy_rot = [item for item in copied_bones_rot if item[0] == pose_bone.name]
+            copy_damped_track = [item for item in copied_bones_damped_track \
+                if item[0] == pose_bone.name]
+            print(copy_damped_track)
             if pose_bone.name == "root":
                 copy_spine_loc = (pose_bone.constraints.get("Spine Location Copy")
-                                or pose_bone.constraints.new(type='COPY_LOCATION'))
+                                or pose_bone.constraints.new(type='COPY_LOCATION')) 
                 copy_spine_loc.name = "Spine Location Copy"
-                copy_spine_loc.target = metarig
-                copy_spine_loc.subtarget = "spine"
+                copy_spine_loc.target = kinect_rig
+                copy_spine_loc.subtarget = "hip_corrected"
                 copy_spine_loc.use_x = True
                 copy_spine_loc.use_y = True
                 copy_spine_loc.use_z = False
@@ -523,11 +562,94 @@ class RetargetMetarigToKinectRig(Operator):
                 copy_spine_rot = (pose_bone.constraints.get("Spine Rotation Copy")
                                 or pose_bone.constraints.new(type='COPY_ROTATION'))
                 copy_spine_rot.name = "Spine Rotation Copy"
-                copy_spine_rot.target = metarig
-                copy_spine_rot.subtarget = "spine"
+                copy_spine_rot.target = kinect_rig
+                copy_spine_rot.subtarget = "hip_corrected"
                 copy_spine_rot.use_x = False
                 copy_spine_rot.use_y = False
                 copy_spine_rot.use_z = True
+            elif pose_bone.name == "spine":
+                copy_spine_loc = (pose_bone.constraints.get("Spine Location Copy")
+                                or pose_bone.constraints.new(type='COPY_LOCATION'))
+                copy_spine_loc.name = "Spine Location Copy"
+                copy_spine_loc.target = kinect_rig
+                copy_spine_loc.subtarget = "hip_corrected"
+
+                copy_spine_rot = (pose_bone.constraints.get("Spine Rotation Copy")
+                                or pose_bone.constraints.new(type='COPY_ROTATION'))
+                copy_spine_rot.name = "Spine Rotation Copy"
+                copy_spine_rot.target = kinect_rig
+                copy_spine_rot.subtarget = "hip_corrected"
+            elif pose_bone.name == "spine.002":
+                copy_spine_loc = (pose_bone.constraints.get("Spine Location Copy")
+                                or pose_bone.constraints.new(type='COPY_LOCATION'))
+                copy_spine_loc.name = "Spine Location Copy"
+                copy_spine_loc.target = kinect_rig
+                copy_spine_loc.subtarget = prefix+"Spine"
+
+                copy_spine_rot = (pose_bone.constraints.get("Spine Rotation Copy")
+                                or pose_bone.constraints.new(type='COPY_ROTATION'))
+                copy_spine_rot.name = "Spine Rotation Copy"
+                copy_spine_rot.target = kinect_rig
+                copy_spine_rot.subtarget = prefix+"Spine"
+            elif pose_bone.name == "spine.004":
+                copy_spine_loc = (pose_bone.constraints.get("Spine Location Copy")
+                                or pose_bone.constraints.new(type='COPY_LOCATION'))
+                copy_spine_loc.name = "Spine Location Copy"
+                copy_spine_loc.target = kinect_rig
+                copy_spine_loc.subtarget = prefix+"Neck"
+
+                copy_spine_rot = (pose_bone.constraints.get("Spine Rotation Copy")
+                                or pose_bone.constraints.new(type='COPY_ROTATION'))
+                copy_spine_rot.name = "Spine Rotation Copy"
+                copy_spine_rot.target = kinect_rig
+                copy_spine_rot.subtarget = prefix+"Neck"
+                # copy_spine_rot.target_space = "LOCAL"
+                # copy_spine_rot.owner_space = "LOCAL"
+            elif pose_bone.name == "spine.005":
+                copy_spine_loc = (pose_bone.constraints.get("Spine Location Copy")
+                                or pose_bone.constraints.new(type='COPY_LOCATION'))
+                copy_spine_loc.name = "Spine Location Copy"
+                copy_spine_loc.target = kinect_rig
+                copy_spine_loc.subtarget = prefix+"Head"
+                # copy_spine_loc.target_space = "LOCAL"
+                # copy_spine_loc.owner_space = "LOCAL"
+
+                copy_spine_rot = (pose_bone.constraints.get("Spine Rotation Copy")
+                                or pose_bone.constraints.new(type='COPY_ROTATION'))
+                copy_spine_rot.name = "Spine Rotation Copy"
+                copy_spine_rot.target = kinect_rig
+                copy_spine_rot.subtarget = prefix+"Head"
+                # copy_spine_rot.target_space = "LOCAL"
+                # copy_spine_rot.owner_space = "LOCAL"
+            elif copy_rot:
+                copy_rot_con = (pose_bone.constraints.get(copy_rot[0][0]+" Rotation Copy")
+                                or pose_bone.constraints.new(type='COPY_ROTATION'))
+                copy_rot_con.name = copy_rot[0][0]+" Rotation Copy"
+                copy_rot_con.target = kinect_rig
+                copy_rot_con.subtarget = copy_rot[0][1]
+                # copy_rot_con.target_space = "LOCAL"
+                # copy_rot_con.owner_space = "LOCAL"
+                copy_rot_con.target_space = "WORLD"
+                copy_rot_con.owner_space = "WORLD"
+
+            elif copy_damped_track:
+                damped_track = (pose_bone.constraints.get("Follow Bone")
+                                or pose_bone.constraints.new(type='DAMPED_TRACK'))
+                damped_track.name = "Follow Bone"
+                damped_track.target = metarig
+                damped_track.subtarget = copy_damped_track[0][1]
+                damped_track.head_tail = copy_damped_track[0][2]
+
+            # if copy_spine_loc:
+            #     copy_spine_loc.target_space = "LOCAL"
+            #     copy_spine_loc.owner_space = "LOCAL"
+            # if copy_spine_rot:
+            #     copy_spine_rot.target_space = "LOCAL"
+            #     copy_spine_rot.owner_space = "LOCAL"
+            # if copy_rot_con:
+            #     copy_rot_con.target_space = "LOCAL"
+            #     copy_rot_con.owner_space = "LOCAL"
+            
 
         return {'FINISHED'}
 
