@@ -23,57 +23,13 @@ bl_info = {
 ExtraBoneStruct = namedtuple("ExtraBoneStruct", "name head_pos parent")
 
 """Operators"""
-class RetargetMetarigToKinectRig(Operator):
-    """Retarget metarig(Rigify) to Kinect rig"""  # Use this as a tooltip for menu items and buttons.
-    bl_description = "Make metarig(from Rigify) target a rig from a Kinect recording"
-    bl_idname = "scene.retarget_metarig_to_kinect_rig"
+class AlignMetarigAndKinectRig(Operator):
+    """Align metarig(Rigify) and Kinect rig"""  # Use this as a tooltip for menu items and buttons.
+    bl_description = "Make metarig(from Rigify) align with a Kinect rig"
+    bl_idname = "scene.align_metarig_and_kinect_rig"
     # Unique identifier for buttons and menu items to reference.
-    bl_label = "Retarget metarig(Rigify) to Kinect rig"         # Display name in the interface.
+    bl_label = "Align metarig(Rigify) with Kinect rig"         # Display name in the interface.
     bl_options = {'REGISTER', 'UNDO'}  # Enable undo for the operator.
-
-    extra_bones_for_metarig = []
-    extra_bones_for_kinect = []
-
-    # def add_kinect_constraints(self, kinect_rig, metarig, context):
-    #     # select kinect rig
-    #     bpy.ops.object.mode_set(mode='OBJECT', toggle=False)
-    #     kinect_rig.select_set(True)
-    #     bpy.context.view_layer.objects.active = kinect_rig
-    #     bpy.ops.object.mode_set(mode='POSE', toggle=False)
-    #     bpy.ops.pose.select_all(action="DESELECT")
-    #     print(self.left_foot.name)
-    #     print(self.right_foot.name)
-    #     left_foot = kinect_rig.data.bones[self.left_foot.name]
-    #     right_foot = kinect_rig.data.bones[self.right_foot.name]
-
-    #     left_foot.select = True
-    #     right_foot.select = True
-
-    #     bpy.ops.pose.constraints_clear()
-
-    #     for pose_bone in context.selected_pose_bones_from_active_object:
-    #         # use if already existes, else create
-    #         if pose_bone.name in [self.left_foot.name,self.right_foot.name]:
-    #             limit_rot = (pose_bone.constraints.get("LimitRot")
-    #                     or pose_bone.constraints.new(type='LIMIT_ROTATION'))
-    #             limit_rot.name = "LimitRot"
-    #             limit_rot.use_limit_x = True
-    #             limit_rot.use_limit_y = True
-
-    #             limit_pos = (pose_bone.constraints.get("LimitPos")
-    #                     or pose_bone.constraints.new(type='LIMIT_LOCATION'))
-    #             limit_pos.name = "LimitPos"
-    #             limit_pos.use_min_z = True
-    #         if pose_bone.name in [self.left_hand.name, self.right_hand.name]:
-    #             pass
-    #             # track_to_name = "TrackTo"
-    #             # track_to = (pose_bone.constraints.get(track_to_name)
-    #             #         or pose_bone.constraints.new(type='TRACK_TO'))
-    #             # track_to.name = track_to_name
-    #             # track_to.track_axis =  'TRACK_NEGATIVE_Y'
-    #             # track_to.up_axis =  'UP_Z'
-
-
 
     def execute(self, context):
         if not isinstance(context.scene.kinect_retarget_rig_from, bpy.types.Object):
@@ -100,10 +56,20 @@ class RetargetMetarigToKinectRig(Operator):
             rotation_empty = kinect_rig.parent
             location_empty = rotation_empty.parent
 
+        inverse_roll_empty = bpy.context.scene.objects.get("InverseRollEmpty")
+        if not inverse_roll_empty:
+            bpy.ops.object.empty_add(type="SINGLE_ARROW", rotation=(0, 3.14159, 0), location=(0, 0, 10))
+            inverse_roll_empty = context.selected_objects[0]
+
         rotation_empty.name = "KinectRotationCorrection"
         kinect_rig.parent = rotation_empty
         location_empty.name = "KinectPositionCorrection"
         rotation_empty.parent = location_empty
+        inverse_roll_empty.name = "InverseRollEmpty"
+
+        rotation_empty.show_name = True
+        location_empty.show_name = True
+        inverse_roll_empty.show_name = True
 
         # add bones
         kinect_rig.select_set(True)
@@ -331,10 +297,6 @@ class RetargetMetarigToKinectRig(Operator):
             (prefix+"LeftToeBase", "toe.L"),(prefix+"RightToeBase", "toe.R")
                 ]
         for bone_str in bone_strs:
-            # kinect_bone = kinect_rig.data.edit_bones[bone_str[0]]
-            # target_rig_bone = metarig.data.edit_bones[bone_str[1]]
-            # print(kinect_bone, target_rig_bone)
-
             # snap cursor to head
             metarig.data.edit_bones[bone_str[1]].select_head = True
             bpy.ops.view3d.snap_cursor_to_selected()
@@ -359,10 +321,6 @@ class RetargetMetarigToKinectRig(Operator):
             (prefix+"Spine", "spine.002", prefix+"Spine", "spine.003")\
                 ]
         for bone_str in bone_strs:
-            # kinect_bone = kinect_rig.data.edit_bones[bone_str[0]]
-            # target_rig_bone = metarig.data.edit_bones[bone_str[1]]
-            # print(kinect_bone, target_rig_bone)
-
             # snap cursor to head
             metarig.data.edit_bones[bone_str[1]].select_head = True
             bpy.ops.view3d.snap_cursor_to_selected()
@@ -494,10 +452,51 @@ class RetargetMetarigToKinectRig(Operator):
             bpy.ops.view3d.snap_selected_to_cursor(use_offset=False)
             kinect_rig.data.edit_bones[bone_str[0]].select_tail = False
 
+        return {'FINISHED'}
+
+class RetargetMetarigToKinectRig(Operator):
+    """Retarget metarig(Rigify) to Kinect rig"""  # Use this as a tooltip for menu items and buttons.
+    bl_description = "Make metarig(from Rigify) target a rig from a Kinect recording"
+    bl_idname = "scene.retarget_metarig_to_kinect_rig"
+    # Unique identifier for buttons and menu items to reference.
+    bl_label = "Retarget metarig(Rigify) to Kinect rig"         # Display name in the interface.
+    bl_options = {'REGISTER', 'UNDO'}  # Enable undo for the operator.
+
+    extra_bones_for_metarig = []
+    extra_bones_for_kinect = []
+
+    def execute(self, context):
+        if not isinstance(context.scene.kinect_retarget_rig_from, bpy.types.Object):
+            raise TypeError("Must have a Kinect rig set")
+        if not isinstance(context.scene.kinect_retarget_rig_to, bpy.types.Object):
+            raise TypeError("Must have a target rig set")
+        # set to first frame 
+        bpy.context.scene.frame_set(0)
+
+        kinect_rig = context.scene.kinect_retarget_rig_from
+        metarig = context.scene.kinect_retarget_rig_to
+        prefix = kinect_rig.name.split(":")[0] + ":"
+
+        # add kinect rig correction objects
+        if bpy.context.object.mode != 'OBJECT':
+            bpy.ops.object.mode_set(mode='OBJECT', toggle=False)
+
+        inverse_roll_empty = bpy.context.scene.objects.get("InverseRollEmpty")
+        if not inverse_roll_empty:
+            bpy.ops.object.empty_add(type="SINGLE_ARROW", rotation=(0, 3.14159, 0), location=(0, 0, 10))
+            inverse_roll_empty = context.selected_objects[0]
+
+        inverse_roll_empty.name = "InverseRollEmpty"
+        inverse_roll_empty.show_name = True
+
+        # Select rig
+        bpy.ops.object.select_all(action='DESELECT')
+
         # Add bone constaints to metarig
         bpy.ops.object.mode_set(mode='OBJECT', toggle=False)
         metarig.select_set(True)
         kinect_rig.select_set(False)
+        bpy.context.view_layer.objects.active = metarig
 
         bpy.ops.object.mode_set(mode='POSE', toggle=False)
         # deselect the other bones
@@ -512,6 +511,7 @@ class RetargetMetarigToKinectRig(Operator):
         metarig.data.bones["spine.002"].select = True
         metarig.data.bones["spine.004"].select = True
         metarig.data.bones["spine.005"].select = True
+        metarig.data.bones["face"].select = True
         # Arms
         metarig.data.bones["upper_arm.L"].select = True
         metarig.data.bones["upper_arm.R"].select = True
@@ -533,15 +533,20 @@ class RetargetMetarigToKinectRig(Operator):
         bpy.ops.pose.constraints_clear()
 
         copied_bones_rot = [("spine","hip_corrected"),("spine.002",prefix+"Spine"),\
-            ("spine.004",prefix+"Neck"),("spine.005",prefix+"Head"),\
+            ("spine.004",prefix+"Neck"),\
             ("forearm.L",prefix+"LeftForeArm"),("forearm.R",prefix+"RightForeArm"),\
             ("upper_arm.L",prefix+"LeftArm"),("upper_arm.R",prefix+"RightArm"),\
             ("hand.L",prefix+"LeftHand"),("hand.R",prefix+"RightHand"),\
             ("thigh.L",prefix+"LeftUpLeg"),("thigh.R",prefix+"RightUpLeg"),\
             ("shin.L",prefix+"LeftLeg"),("shin.R",prefix+"RightLeg"),\
-            # ("foot.L",prefix+"LeftFoot"),("foot.R",prefix+"RightFoot"),\
+
+            # ("foot.L",prefix+"LeftFoot"),("foot.R",prefix+"RightFoot")\
             # ("toe.L",prefix+"LeftToeBase"),("toe.R",prefix+"RightToeBase")\
                 ]
+        inverse_rolled_bones_rot = [
+            "shin.L","shin.R",
+            # "foot.L","foot.R"
+        ]
         # (pose_bone.name, subtarget, head_tail(0 is head)
         copied_bones_damped_track = []
         for pose_bone in context.selected_pose_bones:
@@ -621,6 +626,20 @@ class RetargetMetarigToKinectRig(Operator):
                 copy_spine_rot.subtarget = prefix+"Head"
                 # copy_spine_rot.target_space = "LOCAL"
                 # copy_spine_rot.owner_space = "LOCAL"
+            elif pose_bone.name == "face":
+                # copy_spine_rot = (pose_bone.constraints.get("Head Rotation Copy")
+                #                 or pose_bone.constraints.new(type='COPY_ROTATION'))
+                # copy_spine_rot.name = "Spine Rotation Copy"
+                # copy_spine_rot.target = kinect_rig
+                # copy_spine_rot.subtarget = prefix+"Head"
+                
+                copy_inverse_rot_con = (pose_bone.constraints.get("Inverse Bone Roll Rotation Add")
+                                or pose_bone.constraints.new(type='COPY_ROTATION'))
+                copy_inverse_rot_con.name = "Inverse Bone Roll Rotation Add"
+                copy_inverse_rot_con.target = inverse_roll_empty
+                copy_inverse_rot_con.mix_mode = "ADD"
+                copy_inverse_rot_con.euler_order = 'YZX'
+
             elif copy_rot:
                 copy_rot_con = (pose_bone.constraints.get(copy_rot[0][0]+" Rotation Copy")
                                 or pose_bone.constraints.new(type='COPY_ROTATION'))
@@ -631,6 +650,19 @@ class RetargetMetarigToKinectRig(Operator):
                 # copy_rot_con.owner_space = "LOCAL"
                 copy_rot_con.target_space = "WORLD"
                 copy_rot_con.owner_space = "WORLD"
+                if copy_rot[0][0] in inverse_rolled_bones_rot:
+                    copy_inverse_rot_con = (pose_bone.constraints.get("Inverse Bone Roll Rotation Add")
+                                or pose_bone.constraints.new(type='COPY_ROTATION'))
+                    copy_inverse_rot_con.name = "Inverse Bone Roll Rotation Add"
+                    copy_inverse_rot_con.target = inverse_roll_empty
+                    copy_inverse_rot_con.mix_mode = "ADD"
+                    if copy_rot[0][0].startswith("shin"):
+                        copy_inverse_rot_con.euler_order = 'YZX'
+                        copy_inverse_rot_con.influence = .5
+                        if copy_rot[0][0] == "shin.L":
+                            copy_inverse_rot_con.invert_y = True
+                    # elif copy_rot[0][0].startswith("foot"):
+                    #     copy_inverse_rot_con.euler_order = 'YZX'
 
             elif copy_damped_track:
                 damped_track = (pose_bone.constraints.get("Follow Bone")
@@ -670,10 +702,11 @@ class VIEW3D_PT_kinect_animation_tools_retarget_to_rigify(Panel):
         col = layout.column(align=True, heading="Retarget Metarig")
         col.prop(scene,"kinect_retarget_rig_from")
         col.prop(scene,"kinect_retarget_rig_to")
+        col.operator("scene.align_metarig_and_kinect_rig", text="Align")
         col.operator("scene.retarget_metarig_to_kinect_rig", text="Retarget")
 
 """Registering"""
-classes = [RetargetMetarigToKinectRig, VIEW3D_PT_kinect_animation_tools_retarget_to_rigify]
+classes = [RetargetMetarigToKinectRig, AlignMetarigAndKinectRig, VIEW3D_PT_kinect_animation_tools_retarget_to_rigify]
 
 def register():
     os.system("cls")
