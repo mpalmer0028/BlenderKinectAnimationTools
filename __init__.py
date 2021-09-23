@@ -129,6 +129,24 @@ class AlignMetarigAndKinectRig(Operator):
         root.tail = up_vec[:]
         metarig.data.edit_bones["spine"].parent =  metarig.data.edit_bones["root"]
 
+        try:
+            foot_target_l =  edit_bones["foot_target.L"]
+        except KeyError:
+            foot_target_l = edit_bones.new("foot_target.L")
+        foot_target_l.head = (0,0,0)
+        foot_target_l.tail = up_vec[:]
+        foot_target_l.parent = edit_bones["shin.L"]
+
+
+        try:
+            foot_target_r =  edit_bones["foot_target.R"]
+        except KeyError:
+            foot_target_r = edit_bones.new("foot_target.R")
+        foot_target_r.head = (0,0,0)
+        foot_target_r.tail = up_vec[:]
+        foot_target_r.parent = edit_bones["shin.R"]
+
+
         # add metarig constraints
         bpy.ops.object.mode_set(mode='POSE', toggle=False)
         bpy.ops.pose.select_all(action="DESELECT")
@@ -138,6 +156,8 @@ class AlignMetarigAndKinectRig(Operator):
         metarig.data.bones["knee_position.L"].select = True
         metarig.data.bones["knee_position.R"].select = True
         metarig.data.bones["root"].select = True
+        metarig.data.bones["foot_target.L"].select = True
+        metarig.data.bones["foot_target.R"].select = True
 
         bpy.ops.pose.constraints_clear()
 
@@ -146,6 +166,8 @@ class AlignMetarigAndKinectRig(Operator):
             "elbow_position.R": prefix + "RightForeArm",
             "knee_position.L": prefix + "LeftLeg",
             "knee_position.R": prefix + "RightLeg",
+            "foot_target.L": "foot.L",
+            "foot_target.R": "foot.R",
             "root": prefix + "Hips",
         }
 
@@ -164,6 +186,25 @@ class AlignMetarigAndKinectRig(Operator):
             copy_pos.use_z = pose_bone.name != "root"
         bpy.ops.pose.select_all(action="DESELECT")
 
+        metarig.data.bones["foot_target.L"].select = True
+        metarig.data.bones["foot_target.R"].select = True
+
+        bpy.ops.pose.constraints_clear()
+        for pose_bone in context.selected_pose_bones_from_active_object:
+            copy_pos = (pose_bone.constraints.get("CopyPos")
+                    or pose_bone.constraints.new(type='COPY_LOCATION'))
+            copy_pos.name = "CopyPos"
+            copy_pos.target = metarig
+            copy_pos.subtarget = subtarget_map[pose_bone.name]
+            
+            limit_pos = (pose_bone.constraints.get("LimitPos")
+                    or pose_bone.constraints.new(type='LIMIT_LOCATION'))
+            limit_pos.name = "LimitPos"
+            limit_pos.use_min_z = True
+            limit_pos.min_z = 1
+            limit_pos.owner_space = 'LOCAL'
+
+        bpy.ops.pose.select_all(action="DESELECT")
         # Rotate kinect
         bpy.ops.object.mode_set(mode='OBJECT', toggle=False)
         bpy.ops.object.select_all(action="DESELECT")
@@ -393,7 +434,8 @@ class AlignMetarigAndKinectRig(Operator):
                     turn_angle = -turn_angle
 
                 bpy.context.scene.tool_settings.transform_pivot_point = 'CURSOR'
-                if turn_angle != 0:
+                # print(turn_angle)
+                if turn_angle > 0.5:
                     # print(bone_name, axis[1],  math.degrees(turn_angle), vertor_direction)
                     bpy.context.object.data.use_mirror_x = True
                     bpy.ops.transform.rotate(value=turn_angle, orient_axis=axis[1], \
@@ -547,13 +589,14 @@ class RetargetMetarigToKinectRig(Operator):
             "shin.L","shin.R",
             # "foot.L","foot.R"
         ]
+        ik_tracks = [("foot.L", "foot_target.L"),("foot.R", "foot_target.R"),]
         # (pose_bone.name, subtarget, head_tail(0 is head)
         copied_bones_damped_track = []
         for pose_bone in context.selected_pose_bones:
             copy_rot = [item for item in copied_bones_rot if item[0] == pose_bone.name]
+            ik_track = [item for item in ik_tracks if item[0] == pose_bone.name]
             copy_damped_track = [item for item in copied_bones_damped_track \
                 if item[0] == pose_bone.name]
-            print(copy_damped_track)
             if pose_bone.name == "root":
                 copy_spine_loc = (pose_bone.constraints.get("Spine Location Copy")
                                 or pose_bone.constraints.new(type='COPY_LOCATION')) 
@@ -664,13 +707,23 @@ class RetargetMetarigToKinectRig(Operator):
                     # elif copy_rot[0][0].startswith("foot"):
                     #     copy_inverse_rot_con.euler_order = 'YZX'
 
-            elif copy_damped_track:
-                damped_track = (pose_bone.constraints.get("Follow Bone")
-                                or pose_bone.constraints.new(type='DAMPED_TRACK'))
-                damped_track.name = "Follow Bone"
-                damped_track.target = metarig
-                damped_track.subtarget = copy_damped_track[0][1]
-                damped_track.head_tail = copy_damped_track[0][2]
+            # elif copy_damped_track:
+            #     damped_track = (pose_bone.constraints.get("Follow Bone")
+            #                     or pose_bone.constraints.new(type='DAMPED_TRACK'))
+            #     damped_track.name = "Follow Bone"
+            #     damped_track.target = metarig
+            #     damped_track.subtarget = copy_damped_track[0][1]
+            #     damped_track.head_tail = copy_damped_track[0][2]
+
+            elif ik_track:
+                ik_track_con = (pose_bone.constraints.get("Follow Target")
+                                or pose_bone.constraints.new(type='IK'))
+                ik_track_con.name = "Follow Target"
+                ik_track_con.target = metarig
+                ik_track_con.subtarget = ik_track[0][1]
+                ik_track_con.chain_count = 1
+                ik_track_con.iterations = 25
+
 
             # if copy_spine_loc:
             #     copy_spine_loc.target_space = "LOCAL"
