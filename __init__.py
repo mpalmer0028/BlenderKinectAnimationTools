@@ -9,9 +9,23 @@ from bpy.props import EnumProperty, PointerProperty
 from bpy.types import Armature, PropertyGroup, Struct, UIList, Operator, Panel, Menu
 from collections import namedtuple
 
-import subprocess
-import sys
-# from scipy import stats
+try:
+    from scipy import stats
+except ImportError:
+    import subprocess
+    import sys
+
+    # path to python.exe
+    python_exe = sys.executable
+    lib_folder =  sys.executable.split('bin\\')[0]+'lib'
+
+    # upgrade pip
+    subprocess.call([python_exe, "-m", "ensurepip"])
+    subprocess.call([python_exe, "-m", "pip", "install", "--upgrade", "pip"])
+
+    # install required packages
+    subprocess.call([python_exe, "-m", "pip", "install","--target="+lib_folder,  "scipy"])
+    from scipy import stats
 
 bl_info = {
     "name": "Kinect Animation Tools",
@@ -803,6 +817,7 @@ class CleanKinectAnimationData(Operator):
                     rotation_data[bone_name]['rotations_between_frames'].append((q_between.angle/t_between))
             print(bone_name,len(rotation_data[bone_name]['keyframes']),len(rotation_data[bone_name]['rotations_between_frames']))
             print(rotation_data[bone_name]['rotations_between_frames'])
+            
             # print(stats.zscore(np.array(rotation_data[bone_name]['rotations_between_frames'])))
 
 
