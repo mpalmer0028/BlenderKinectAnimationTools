@@ -6,8 +6,13 @@ import bpy
 import os, math
 import mathutils, numpy as np
 from bpy.props import EnumProperty, PointerProperty
-from bpy.types import Armature, PropertyGroup, UIList, Operator, Panel, Menu
+from bpy.types import Armature, PropertyGroup, Struct, UIList, Operator, Panel, Menu
 from collections import namedtuple
+
+import subprocess
+import sys
+# from scipy import stats
+
 bl_info = {
     "name": "Kinect Animation Tools",
     "author": "Mitchell Palmer",
@@ -738,6 +743,73 @@ class RetargetMetarigToKinectRig(Operator):
 
         return {'FINISHED'}
 
+class CleanKinectAnimationData(Operator):
+    """Clean Kinect animation data"""  # Use this as a tooltip for menu items and buttons.
+    bl_description = "Clean animation noise/errors from kinect motion capture data"
+    bl_idname = "animation.clean_kinect_animation"
+    # Unique identifier for buttons and menu items to reference.
+    bl_label = "Clean Kinect animation data" # Display name in the interface.
+    bl_options = {'REGISTER', 'UNDO'}  # Enable undo for the operator.
+
+    def execute(self, context):
+        if not isinstance(context.scene.kinect_retarget_rig_from, bpy.types.Object):
+            raise TypeError("Must have a Kinect rig set")
+
+        # set to first frame 
+        bpy.context.scene.frame_set(0)
+
+        kinect_rig = context.scene.kinect_retarget_rig_from
+        prefix = kinect_rig.name.split(":")[0] + ":"
+
+        # add kinect rig correction objects
+        if bpy.context.object.mode != 'OBJECT':
+            bpy.ops.object.mode_set(mode='OBJECT', toggle=False)
+
+        bpy.ops.object.select_all(action='DESELECT')
+        kinect_rig.select_set(True)
+        bpy.context.view_layer.objects.active = kinect_rig
+
+        bpy.ops.object.mode_set(mode='POSE', toggle=False)
+
+        print(kinect_rig.animation_data.action)
+        print(kinect_rig.animation_data.action.fcurves)
+        rotation_data = {}
+        for bone in kinect_rig.data.bones:
+            w = kinect_rig.animation_data.action.fcurves.find("pose.bones[\""+bone.name+"\"].rotation_quaternion", index=0)
+            x = kinect_rig.animation_data.action.fcurves.find("pose.bones[\""+bone.name+"\"].rotation_quaternion", index=1)
+            y = kinect_rig.animation_data.action.fcurves.find("pose.bones[\""+bone.name+"\"].rotation_quaternion", index=2)
+            z = kinect_rig.animation_data.action.fcurves.find("pose.bones[\""+bone.name+"\"].rotation_quaternion", index=3)
+            rotation_data[bone.name]={'keyframes': [],'rotations_between_frames': []}
+            if w and x and y and z:
+                # print(bone.name)
+                for index, key_w in enumerate(w.keyframe_points):
+                    q = mathutils.Quaternion((key_w.co[1], x.keyframe_points[index].co[1], y.keyframe_points[index].co[1], z.keyframe_points[index].co[1]))
+                    rotation_data[bone.name]['keyframes'].append((key_w.co[0], q))
+                    # print(key_w.co[0], q)
+            # for index, curve in enumerate(kinect_rig.animation_data.action.fcurves):
+            #     if curve.data_path.endswith('rotation_quaternion'):
+                    
+            #     #     for key in curve.keyframe_points:
+            #     #         # The curve's points has a 'co' vector giving the frame and the value
+            #     #         print( 'frame: ', key.co[0], ' value: ', key.co[1] )
+        # print(rotation_data)
+
+        # get rotation amounts between frames
+        for bone_name in rotation_data:
+            for index, keyframe in enumerate(rotation_data[bone_name]['keyframes']):
+                if index < len(rotation_data[bone_name]['keyframes'])-1:
+                    q_between = keyframe[1].rotation_difference(rotation_data[bone_name]['keyframes'][index+1][1])
+                    t_between = rotation_data[bone_name]['keyframes'][index+1][0] - keyframe[0]
+                    rotation_data[bone_name]['rotations_between_frames'].append((q_between.angle/t_between))
+            print(bone_name,len(rotation_data[bone_name]['keyframes']),len(rotation_data[bone_name]['rotations_between_frames']))
+            print(rotation_data[bone_name]['rotations_between_frames'])
+            # print(stats.zscore(np.array(rotation_data[bone_name]['rotations_between_frames'])))
+
+
+                    
+
+        return {'FINISHED'}
+
 """Panels"""
 class VIEW3D_PT_kinect_animation_tools_retarget_to_rigify(Panel):
     """Retarget To Rigify"""
@@ -758,8 +830,27 @@ class VIEW3D_PT_kinect_animation_tools_retarget_to_rigify(Panel):
         col.operator("scene.align_metarig_and_kinect_rig", text="Align")
         col.operator("scene.retarget_metarig_to_kinect_rig", text="Retarget")
 
+class VIEW3D_PT_kinect_clean_animation_data(Panel):
+    """Clean Kinect data"""
+    bl_space_type = 'GRAPH_EDITOR'
+    bl_region_type = 'UI'
+    bl_category = "Kinect"
+    bl_label = "Clean Kinect data"
+
+    def draw(self, context):
+        layout = self.layout
+        scene = bpy.data.scenes[0]
+        layout.use_property_split = True
+        layout.use_property_decorate = False  # No animation.
+
+        col = layout.column(align=True, heading="Clean Kinect data")
+        col.prop(scene,"kinect_retarget_rig_from")
+        col.operator("animation.clean_kinect_animation", text="Clean Kinect Rotations")
+
 """Registering"""
-classes = [RetargetMetarigToKinectRig, AlignMetarigAndKinectRig, VIEW3D_PT_kinect_animation_tools_retarget_to_rigify]
+classes = [RetargetMetarigToKinectRig, AlignMetarigAndKinectRig, CleanKinectAnimationData,
+    VIEW3D_PT_kinect_animation_tools_retarget_to_rigify, VIEW3D_PT_kinect_clean_animation_data
+]
 
 def register():
     os.system("cls")
