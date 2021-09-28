@@ -5,7 +5,7 @@ from numpy.lib import angle
 import bpy
 import os, math
 import mathutils, numpy as np
-from bpy.props import EnumProperty, PointerProperty
+from bpy.props import FloatProperty, IntProperty, PointerProperty
 from bpy.types import Armature, PropertyGroup, Struct, UIList, Operator, Panel, Menu
 from collections import namedtuple
 
@@ -39,7 +39,51 @@ bl_info = {
 }
 """Info for Blender"""
 
+"""Data Classes"""
 ExtraBoneStruct = namedtuple("ExtraBoneStruct", "name head_pos parent")
+
+class KeyframeRotation:
+    """For storing rotation keyframe data"""
+    def __init__(self, time, index, quaternion, w, x, y ,z):
+        self.time = time
+        self.index = index
+        self.quaternion = quaternion
+        self.w = w
+        self.x = x
+        self.y = y
+        self.z = z
+    
+    def __str__(self):
+        return "KeyframeRotation: "+ str(self.time)
+    def __repr__(self):
+        return self.__str__()
+
+class KeyframeBetween:
+    """For storing rotation keyframe data"""
+    def __init__(self, start_key, end_key):
+        self.start_key = start_key
+        self.end_key = end_key
+        self.pass_filter = True
+    
+    def __str__(self):
+        return "KeyframeBetween: "+ ("P" if self.pass_filter else "F") + ' ' + str((self.start_key.time + self.end_key.time) / 2)
+    def __repr__(self):
+        return self.__str__()
+
+class NoiseSpike:
+    """For storing noise spike data"""
+    def __init__(self, before_key, after_key, middle_keys):
+        self.before_key = before_key
+        self.after_key = after_key
+        self.middle_keys = middle_keys
+    
+    def __str__(self):
+        if len(self.middle_keys) > 1:
+            return "NoiseSpike: "+ str((self.middle_keys)) +' '+ str(len(self.middle_keys))
+        else:
+            return "NoiseSpike: "+ str((self.middle_keys))
+    def __repr__(self):
+        return self.__str__()
 
 """Operators"""
 class AlignMetarigAndKinectRig(Operator):
@@ -773,9 +817,8 @@ class CleanKinectAnimationData(Operator):
         bpy.context.scene.frame_set(0)
 
         kinect_rig = context.scene.kinect_retarget_rig_from
-        prefix = kinect_rig.name.split(":")[0] + ":"
 
-        # add kinect rig correction objects
+        # select kinect rig
         if bpy.context.object.mode != 'OBJECT':
             bpy.ops.object.mode_set(mode='OBJECT', toggle=False)
 
@@ -785,20 +828,28 @@ class CleanKinectAnimationData(Operator):
 
         bpy.ops.object.mode_set(mode='POSE', toggle=False)
 
-        print(kinect_rig.animation_data.action)
-        print(kinect_rig.animation_data.action.fcurves)
+        # print(kinect_rig.animation_data.action)
+        # print(kinect_rig.animation_data.action.fcurves)
+        max_noise_spike_width = context.scene.max_noise_spike_width
+        max_noise_spike_angle = context.scene.max_noise_spike_angle
+
+        # build rotation data for each frame
         rotation_data = {}
+        context.window_manager.progress_begin(0, len(kinect_rig.data.bones)*2)
+        progress_i = 0
         for bone in kinect_rig.data.bones:
+            # get quaternion curves
             w = kinect_rig.animation_data.action.fcurves.find("pose.bones[\""+bone.name+"\"].rotation_quaternion", index=0)
             x = kinect_rig.animation_data.action.fcurves.find("pose.bones[\""+bone.name+"\"].rotation_quaternion", index=1)
             y = kinect_rig.animation_data.action.fcurves.find("pose.bones[\""+bone.name+"\"].rotation_quaternion", index=2)
             z = kinect_rig.animation_data.action.fcurves.find("pose.bones[\""+bone.name+"\"].rotation_quaternion", index=3)
-            rotation_data[bone.name]={'keyframes': [],'rotations_between_frames': []}
+
             if w and x and y and z:
-                # print(bone.name)
+                # define empty lists if quaternion data exists
+                rotation_data[bone.name]={'keyframes': [],'rotations_between_frames': [], 'spikes':[]}                
                 for index, key_w in enumerate(w.keyframe_points):
                     q = mathutils.Quaternion((key_w.co[1], x.keyframe_points[index].co[1], y.keyframe_points[index].co[1], z.keyframe_points[index].co[1]))
-                    rotation_data[bone.name]['keyframes'].append((key_w.co[0], q))
+                    rotation_data[bone.name]['keyframes'].append(KeyframeRotation(key_w.co[0], index, q, key_w, x.keyframe_points[index], y.keyframe_points[index], z.keyframe_points[index]))
                     # print(key_w.co[0], q)
             # for index, curve in enumerate(kinect_rig.animation_data.action.fcurves):
             #     if curve.data_path.endswith('rotation_quaternion'):
@@ -806,21 +857,76 @@ class CleanKinectAnimationData(Operator):
             #     #     for key in curve.keyframe_points:
             #     #         # The curve's points has a 'co' vector giving the frame and the value
             #     #         print( 'frame: ', key.co[0], ' value: ', key.co[1] )
+            progress_i += 1
+            context.window_manager.progress_update(progress_i)
         # print(rotation_data)
 
-        # get rotation amounts between frames
+        # build inbetween frames
         for bone_name in rotation_data:
+            # go over each frame
             for index, keyframe in enumerate(rotation_data[bone_name]['keyframes']):
                 if index < len(rotation_data[bone_name]['keyframes'])-1:
-                    q_between = keyframe[1].rotation_difference(rotation_data[bone_name]['keyframes'][index+1][1])
-                    t_between = rotation_data[bone_name]['keyframes'][index+1][0] - keyframe[0]
-                    rotation_data[bone_name]['rotations_between_frames'].append((q_between.angle/t_between))
-            print(bone_name,len(rotation_data[bone_name]['keyframes']),len(rotation_data[bone_name]['rotations_between_frames']))
-            print(rotation_data[bone_name]['rotations_between_frames'])
-            
-            # print(stats.zscore(np.array(rotation_data[bone_name]['rotations_between_frames'])))
+                    data_between = KeyframeBetween(keyframe, rotation_data[bone_name]['keyframes'][index+1])
+                    q_between = data_between.start_key.quaternion.rotation_difference(data_between.end_key.quaternion)
+                    t_between = data_between.end_key.time - data_between.start_key.time
+                    data_between.pass_filter = (q_between.angle / t_between) < max_noise_spike_angle
+                    # print(index, np.arctan(q_between.angle / t_between))
+                    rotation_data[bone_name]['rotations_between_frames'].append(data_between)
+            # print(bone_name,len(rotation_data[bone_name]['keyframes']),len(rotation_data[bone_name]['rotations_between_frames']))
+            # print(sorted(rotation_data[bone_name]['rotations_between_frames'], reverse=True))
+            # if 'LeftLeg' in bone_name:
+                
+            # test_a =np.array(rotation_data[bone_name]['rotations_between_frames'])
+            # result = stats.zscore(test_a,ddof=1)
+            inbetweens = rotation_data[bone_name]['rotations_between_frames']
 
-
+            inbetweens_length = len(inbetweens)
+            # go over each inbetween 
+            for i, inbetween in  enumerate(inbetweens):
+                # real_i = inbetweens_length - i
+                # does this frame pass and is it after the second frame
+                if not inbetween.pass_filter and i > 1:
+                    # check for spikes in different sizes
+                    for i_away in reversed(range(1,max_noise_spike_width+1)):
+                        # Look for two failing inbetweens sandwiching passing inbetweens
+                        # end fail already checked
+                        # if "LeftLeg" in bone_name: 
+                        #     print('index',i, 'away', i_away, 'frame',)# rotation_data[bone_name]['keyframes'][i].time)
+                        has_spike = True
+                        for sandwich_i in range(i+1,i+i_away):
+                            # print(sandwich_i,"pass" if inbetweens[sandwich_i].pass_filter else "fail")
+                            if sandwich_i >= inbetweens_length:
+                                has_spike = False
+                                break
+                            elif not inbetweens[sandwich_i].pass_filter:
+                                has_spike = False
+                                break
+                        # check last inbetween
+                        end_cap_i = i+i_away+1 
+                        if has_spike and end_cap_i < inbetweens_length and not inbetweens[end_cap_i].pass_filter: 
+                            # if "LeftLeg" in bone_name:
+                            #     print("spike found", rotation_data[bone_name]['keyframes'][i+1:end_cap_i])
+                            rotation_data[bone_name]['spikes'].append(NoiseSpike(inbetween.end_key,inbetweens[end_cap_i].start_key,\
+                                rotation_data[bone_name]['keyframes'][i+1:end_cap_i]))
+                            break
+        # progress_i += 1
+        # context.window_manager.progress_update(progress_i)
+        for bone_name in rotation_data:
+            if len(rotation_data[bone_name]['spikes']) > 0: # and "LeftLeg" in bone_name:
+                # print('summary', bone_name)
+                for spikes in reversed(rotation_data[bone_name]['spikes']):
+                    for keyframe in reversed(spikes.middle_keys):
+                        # print(keyframe)
+                        w = kinect_rig.animation_data.action.fcurves.find("pose.bones[\""+bone_name+"\"].rotation_quaternion", index=0).keyframe_points
+                        x = kinect_rig.animation_data.action.fcurves.find("pose.bones[\""+bone_name+"\"].rotation_quaternion", index=1).keyframe_points
+                        y = kinect_rig.animation_data.action.fcurves.find("pose.bones[\""+bone_name+"\"].rotation_quaternion", index=2).keyframe_points
+                        z = kinect_rig.animation_data.action.fcurves.find("pose.bones[\""+bone_name+"\"].rotation_quaternion", index=3).keyframe_points
+                        
+                        w.remove(w[keyframe.index])
+                        x.remove(x[keyframe.index])
+                        y.remove(y[keyframe.index])
+                        z.remove(z[keyframe.index])
+        # context.window_manager.progress_end();
                     
 
         return {'FINISHED'}
@@ -860,6 +966,9 @@ class VIEW3D_PT_kinect_clean_animation_data(Panel):
 
         col = layout.column(align=True, heading="Clean Kinect data")
         col.prop(scene,"kinect_retarget_rig_from")
+
+        col.prop(scene,"max_noise_spike_angle")
+        col.prop(scene,"max_noise_spike_width")
         col.operator("animation.clean_kinect_animation", text="Clean Kinect Rotations")
 
 """Registering"""
@@ -878,6 +987,20 @@ def register():
         name="Target Rig", type=bpy.types.Object,
         description="Rig(your Rigify metarig) that will be targeting the kinect rig")
 
+    bpy.types.Scene.max_noise_spike_width = IntProperty(
+        name="Max Spike Width",
+        default=6,
+        # step=2,
+        min=1,
+        description="Maximum width in keyframes of animation error/noise spikes to filter out.")
+
+    bpy.types.Scene.max_noise_spike_angle = FloatProperty(
+        name="Max Spike Angle",
+        default=.3 ,
+        step=10,
+        min=.00001,
+        description="Maximum angle in between keyframes of animation error/noise spikes to filter out.")
+
     """Register classes"""
     for cls in classes:
         bpy.utils.register_class(cls)
@@ -892,6 +1015,8 @@ def unregister():
     """Unregister properties"""
     del bpy.types.Scene.kinect_retarget_rig_from
     del bpy.types.Scene.kinect_retarget_rig_to
+    del bpy.types.Scene.max_noise_spike_width
+    del bpy.types.Scene.max_noise_spike_angle
 
 if __name__ == "__main__":
     register()
