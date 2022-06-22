@@ -13,9 +13,9 @@
  5. Hit the Retarget button to add all constraints and adjustments
  6. The metarig should now target the kinect rig.
  7. Since the Kinect data can be far from perfect I've added a Kinect panel to the Graph Editor with a Clean Kinect Rotations button.
- 8. Clean Kinect Rotations button attempts to remove large sudden rotation spikes that happen when the Kinect missing calculation a rotation. The existing settings have helped my animations the most, but it is just averaging out the spikes so it has its limitations.
+ 8. Clean Kinect Rotations button attempts to remove large sudden rotation spikes that happen when the Kinect miss calculates a rotation. The existing settings have helped my animations the most, but it is just averaging out the spikes so it has its limitations.
  ![Graph Editor Panel preview](./PanelCleaningPreview.png "Preview of the Kinect panel in in the Graph Editor")
  ### Recommendations
- The [tutorial](https://youtube.com/playlist?list=PLZpDYt0cyiuvd2X6ucSYilKJD6rKK2Uys "Blender + Kinect Rigging & Animation - FAST! Royal Skies")  by [Royal Skies](https://www.youtube.com/c/RoyalSkiesLLC "Royal Skies youtube channel") that this addon is base on includes information on an rig that already has everything setup on a different rig. If you don't want to use a rigify metarig then you can use that or add the constriants manually using the tutorial.
+ The [tutorial](https://youtube.com/playlist?list=PLZpDYt0cyiuvd2X6ucSYilKJD6rKK2Uys "Blender + Kinect Rigging & Animation - FAST! Royal Skies")  by [Royal Skies](https://www.youtube.com/c/RoyalSkiesLLC "Royal Skies youtube channel") that this addon is base on includes information on an rig that already has everything setup on a different rig. If you don't want to use a rigify metarig then you can use that or add the constraints manually using the tutorial.
  
  I've also included a demo file [demo .blend file](./ExampleRigFromConvertedKinectFBX.blend) that includes a metarig and imported Kinect rig with animation data.
