@@ -98,7 +98,7 @@ class AlignMetarigAndKinectRig(Operator):
         if not isinstance(context.scene.kinect_retarget_rig_from, bpy.types.Object):
             raise TypeError("Must have a Kinect rig set")
         if not isinstance(context.scene.kinect_retarget_rig_to, bpy.types.Object):
-            raise TypeError("Must have a target rig set")
+            raise TypeError("Must have a metarig set")
         # set to first frame 
         bpy.context.scene.frame_set(0)
 
@@ -574,7 +574,7 @@ class RetargetMetarigToKinectRig(Operator):
         if not isinstance(context.scene.kinect_retarget_rig_from, bpy.types.Object):
             raise TypeError("Must have a Kinect rig set")
         if not isinstance(context.scene.kinect_retarget_rig_to, bpy.types.Object):
-            raise TypeError("Must have a target rig set")
+            raise TypeError("Must have a metarig set")
         # set to first frame 
         bpy.context.scene.frame_set(0)
 
@@ -984,7 +984,7 @@ def register():
         description="Rig gotten from you kinect recording")
 
     bpy.types.Scene.kinect_retarget_rig_to = PointerProperty(
-        name="Target Rig", type=bpy.types.Object,
+        name="Rigify metarig", type=bpy.types.Object,
         description="Rig(your Rigify metarig) that will be targeting the kinect rig")
 
     bpy.types.Scene.max_noise_spike_width = IntProperty(
